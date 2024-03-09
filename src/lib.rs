@@ -127,15 +127,14 @@ impl Plugin for Centered {
             // Smoothing is optionally built into the parameters themselves
             let gain = self.params.gain.smoothed.next();
 
-            let left = *channel_samples.get_mut(0).unwrap();
-            let right = *channel_samples.get_mut(1).unwrap();
-            let t = |x: f32, y: f32| {
-                ((y/x).atan() * 180.0) / PI
-            };
-            let ps = t(left, right);
-            let angle = ps + (45.0 * left.signum());
-            *channel_samples.get_mut(0).unwrap() = (left * angle.cos()) - (right * (angle + PI).sin());
-            *channel_samples.get_mut(1).unwrap() = (left * -angle.sin()) - (right * (angle + PI).cos());
+                let left = *channel_samples.get_mut(0).unwrap();
+                let right = *channel_samples.get_mut(1).unwrap();
+            // dot product of vector (1, 1) and sample
+                let dot = left + right;
+                let det = right - left;
+                let angle = det.atan2(dot);
+                *channel_samples.get_mut(0).unwrap() = (left * angle.cos()) - (right * angle.sin());
+                *channel_samples.get_mut(1).unwrap() = (left * -angle.sin()) - (right * angle.cos());
 
         }
 
