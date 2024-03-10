@@ -182,7 +182,6 @@ checksum = "a0ba8f7aaa012f30d5b2861462f6708eccd49c3c39863fe083a308035f63d723"
 name = "centered"
 version = "0.1.0"
 dependencies = [
- "atomic_float",
  "nih_plug",
  "nih_plug_egui",
 ]

@@ -6,9 +6,12 @@ use std::sync::Arc;
 
 mod editor;
 
+pub const GONIO_NUM_SAMPLES: usize = 1000;
+
 struct Centered {
     params: Arc<CenteredParams>,
-    stereo_data: Arc<(AtomicF32, AtomicF32)>,
+    stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
+    stereo_data_idx: usize,
     correcting_angle: Arc<AtomicF32>,
 }
 
@@ -29,7 +32,9 @@ impl Default for Centered {
     fn default() -> Self {
         Self {
             params: Arc::new(CenteredParams::default()),
-            stereo_data: Default::default(),
+            // evil hack because AtomicF32 doesn't implement copy
+            stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
+            stereo_data_idx: 0,
             correcting_angle: Default::default(),
         }
     }
@@ -130,6 +135,17 @@ impl Plugin for Centered {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        if self.params.editor_state.is_open() {
+            for mut channel_samples in buffer.iter_samples() {
+                let (left, right) = &self.stereo_data[self.stereo_data_idx];
+                left.store(*channel_samples.get_mut(0).unwrap(), std::sync::atomic::Ordering::Relaxed);
+                right.store(*channel_samples.get_mut(1).unwrap(), std::sync::atomic::Ordering::Relaxed);
+
+                self.stereo_data_idx += 1;
+                self.stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
+            }
+        }
+
         let t = |x: f32, y: f32| ((y.abs() / x.abs()).atan() * 180.0) / PI;
 
         let pan_deg = (-45.0
