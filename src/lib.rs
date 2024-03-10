@@ -1,7 +1,6 @@
 use editor::editor;
 use nih_plug::prelude::*;
 use nih_plug_egui::EguiState;
-use std::f32::consts::PI;
 use std::sync::Arc;
 
 mod editor;
@@ -104,7 +103,7 @@ impl Plugin for Centered {
         self.params.clone()
     }
 
-    fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         editor(
             self.params.clone(),
             self.stereo_data.clone(),
@@ -138,23 +137,31 @@ impl Plugin for Centered {
         if self.params.editor_state.is_open() {
             for mut channel_samples in buffer.iter_samples() {
                 let (left, right) = &self.stereo_data[self.stereo_data_idx];
-                left.store(*channel_samples.get_mut(0).unwrap(), std::sync::atomic::Ordering::Relaxed);
-                right.store(*channel_samples.get_mut(1).unwrap(), std::sync::atomic::Ordering::Relaxed);
+                left.store(
+                    *channel_samples.get_mut(0).unwrap(),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+                right.store(
+                    *channel_samples.get_mut(1).unwrap(),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
 
                 self.stereo_data_idx += 1;
                 self.stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
             }
         }
 
-        let t = |x: f32, y: f32| ((y.abs() / x.abs()).atan() * 180.0) / PI;
+        let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
 
         let pan_deg = (-45.0
             - buffer
                 .iter_samples()
                 .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
                 .filter(|s| !s.is_nan())
-                .zip((1..))
-                .fold(0., |acc, (i, d)| (i + acc * (d - 1) as f32) / d as f32))
+                .zip(1..)
+                .fold(0.0_f32, |acc, (i, d)| {
+                    acc.mul_add((d - 1) as f32, i) / d as f32
+                }))
         .to_radians();
         self.correcting_angle
             .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
@@ -162,9 +169,9 @@ impl Plugin for Centered {
         for mut channel_samples in buffer.iter_samples() {
             let left = *channel_samples.get_mut(0).unwrap();
             let right = *channel_samples.get_mut(1).unwrap();
-            *channel_samples.get_mut(0).unwrap() = (left * pan_deg.cos()) - (right * pan_deg.sin());
-            *channel_samples.get_mut(1).unwrap() =
-                (left * -pan_deg.sin()) - (right * pan_deg.cos());
+            let (pan_sin, pan_cos) = pan_deg.sin_cos();
+            *channel_samples.get_mut(0).unwrap() = left.mul_add(pan_cos, -(right * pan_sin));
+            *channel_samples.get_mut(1).unwrap() = left.mul_add(-pan_sin, -(right * pan_cos));
         }
 
         ProcessStatus::Normal
