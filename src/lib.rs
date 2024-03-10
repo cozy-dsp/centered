@@ -16,12 +16,9 @@ struct Centered {
 
 #[derive(Params)]
 struct CenteredParams {
-    /// The parameter's ID is used to identify the parameter in the wrappred plugin API. As long as
-    /// these IDs remain constant, you can rename and reorder these fields as you wish. The
-    /// parameters are exposed to the host in the same order they were defined. In this case, this
-    /// gain parameter is stored as linear gain while the values are displayed in decibels.
-    #[id = "gain"]
-    pub gain: FloatParam,
+    /// The amount to correct the input by, represented as a percent
+    #[id = "correction-amount"]
+    pub correction_amount: FloatParam,
 
     #[persist = "editor-state"]
     pub editor_state: Arc<EguiState>,
@@ -42,19 +39,15 @@ impl Default for Centered {
 impl Default for CenteredParams {
     fn default() -> Self {
         Self {
-            // This gain is stored as linear gain. NIH-plug comes with useful conversion functions
-            // to treat these kinds of parameters as if we were dealing with decibels. Storing this
-            // as decibels is easier to work with, but requires a conversion for every sample.
-            gain: FloatParam::new(
-                "Gain",
-                0.0,
+            correction_amount: FloatParam::new(
+                "Correction Amount",
+                100.0,
                 FloatRange::Linear {
-                    min: -180.0,
-                    max: 180.0,
+                    min: 0.0,
+                    max: 100.0,
                 },
             )
-            // Because the gain parameter is stored as linear gain instead of storing the value as
-            // decibels, we need logarithmic smoothing
+            .with_unit("%")
             .with_step_size(0.1),
 
             editor_state: EguiState::from_size(600, 480),
@@ -125,9 +118,8 @@ impl Plugin for Centered {
 
         let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
 
-        
         #[allow(clippy::cast_precision_loss)]
-        let pan_deg = (-45.0
+        let pan_deg = ((-45.0
             - buffer
                 .iter_samples()
                 .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
@@ -137,6 +129,7 @@ impl Plugin for Centered {
                     // this never approaches 2^23 so it doesn't matter
                     acc.mul_add((d - 1) as f32, i) / d as f32
                 }))
+                * self.params.correction_amount.modulated_normalized_value())
         .to_radians();
         self.correcting_angle
             .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
@@ -159,14 +152,22 @@ impl ClapPlugin for Centered {
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
 
-    const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo, ClapFeature::Mixing, ClapFeature::Utility];
+    const CLAP_FEATURES: &'static [ClapFeature] = &[
+        ClapFeature::AudioEffect,
+        ClapFeature::Stereo,
+        ClapFeature::Mixing,
+        ClapFeature::Utility,
+    ];
 }
 
 impl Vst3Plugin for Centered {
     const VST3_CLASS_ID: [u8; 16] = *b"cozydspcentered!";
 
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Fx, Vst3SubCategory::Stereo, Vst3SubCategory::Spatial];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
+        Vst3SubCategory::Fx,
+        Vst3SubCategory::Stereo,
+        Vst3SubCategory::Spatial,
+    ];
 }
 
 nih_export_clap!(Centered);
