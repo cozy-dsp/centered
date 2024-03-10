@@ -25,8 +25,8 @@ pub fn editor(
     create_egui_editor(
         params.editor_state.clone(),
         (),
-        |_, _| {},
-        move |ctx, _, _| {
+        |_, ()| {},
+        move |ctx, _, ()| {
             TopBottomPanel::top("sex").show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("my bals");

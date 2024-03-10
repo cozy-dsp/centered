@@ -34,7 +34,7 @@ impl Default for Centered {
             // evil hack because AtomicF32 doesn't implement copy
             stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
             stereo_data_idx: 0,
-            correcting_angle: Default::default(),
+            correcting_angle: Arc::default(),
         }
     }
 }
@@ -153,6 +153,8 @@ impl Plugin for Centered {
 
         let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
 
+        
+        #[allow(clippy::cast_precision_loss)]
         let pan_deg = (-45.0
             - buffer
                 .iter_samples()
@@ -160,6 +162,7 @@ impl Plugin for Centered {
                 .filter(|s| !s.is_nan())
                 .zip(1..)
                 .fold(0.0_f32, |acc, (i, d)| {
+                    // this never approaches 2^23 so it doesn't matter
                     acc.mul_add((d - 1) as f32, i) / d as f32
                 }))
         .to_radians();
