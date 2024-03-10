@@ -70,8 +70,6 @@ impl Plugin for Centered {
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    // The first audio IO layout is used as the default. The other layouts may be selected either
-    // explicitly or automatically by the host or the user depending on the plugin API/backend.
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
         main_input_channels: NonZeroU32::new(2),
         main_output_channels: NonZeroU32::new(2),
@@ -79,9 +77,6 @@ impl Plugin for Centered {
         aux_input_ports: &[],
         aux_output_ports: &[],
 
-        // Individual ports and the layout as a whole can be named here. By default these names
-        // are generated as needed. This layout will be called 'Stereo', while a layout with
-        // only one input and output channel would be called 'Mono'.
         names: PortNames::const_default(),
     }];
 
@@ -90,13 +85,7 @@ impl Plugin for Centered {
 
     const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
-    // If the plugin can send or receive SysEx messages, it can define a type to wrap around those
-    // messages here. The type implements the `SysExMessage` trait, which allows conversion to and
-    // from plain byte buffers.
     type SysExMessage = ();
-    // More advanced plugins can use this to run expensive background tasks. See the field's
-    // documentation for more information. `()` means that the plugin does not have any background
-    // tasks.
     type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {
@@ -109,23 +98,6 @@ impl Plugin for Centered {
             self.stereo_data.clone(),
             self.correcting_angle.clone(),
         )
-    }
-
-    fn initialize(
-        &mut self,
-        _audio_io_layout: &AudioIOLayout,
-        _buffer_config: &BufferConfig,
-        _context: &mut impl InitContext<Self>,
-    ) -> bool {
-        // Resize buffers and perform other potentially expensive initialization operations here.
-        // The `reset()` function is always called right after this function. You can remove this
-        // function if you do not need it.
-        true
-    }
-
-    fn reset(&mut self) {
-        // Reset buffers and envelopes here. This can be called from the audio thread and may not
-        // allocate. You can remove this function if you do not need it.
     }
 
     fn process(
@@ -187,16 +159,14 @@ impl ClapPlugin for Centered {
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
 
-    // Don't forget to change these features
-    const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo];
+    const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::AudioEffect, ClapFeature::Stereo, ClapFeature::Mixing, ClapFeature::Utility];
 }
 
 impl Vst3Plugin for Centered {
     const VST3_CLASS_ID: [u8; 16] = *b"cozydspcentered!";
 
-    // And also don't forget to change these categories
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
-        &[Vst3SubCategory::Fx, Vst3SubCategory::Dynamics];
+        &[Vst3SubCategory::Fx, Vst3SubCategory::Stereo, Vst3SubCategory::Spatial];
 }
 
 nih_export_clap!(Centered);
