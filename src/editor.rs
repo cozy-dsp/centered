@@ -50,13 +50,13 @@ pub fn editor(
                     let y = left.load(std::sync::atomic::Ordering::Relaxed);
                     let x = right.load(std::sync::atomic::Ordering::Relaxed);
 
-                    let radius = x.hypot(y).log10();
+                    let radius = x.hypot(y).log2();
                     let mut angle = (y / x).atan();
 
                     match (x, y) {
                         // y != 0.0 doesn't produce correct results for some reason. floats!
                         #[allow(clippy::double_comparisons)]
-                        (x , y) if (y < 0.0 || y > 0.0) && x < 0.0 => {
+                        (x, y) if (y < 0.0 || y > 0.0) && x < 0.0 => {
                             angle += PI;
                         }
                         (x, y) if x > 0.0 && y < 0.0 => {
@@ -75,7 +75,7 @@ pub fn editor(
 
                     let (sin, cos) = angle.sin_cos();
 
-                    let offset = Vec2::new(radius * cos, radius * sin) * Vec2::splat(100.0);
+                    let offset = Vec2::new(radius * cos, radius * sin) * 10.0;
 
                     painter.circle_filled(center + offset, 1.5, Color32::RED);
                 }
