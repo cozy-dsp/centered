@@ -1,13 +1,15 @@
+use editor::editor;
 use nih_plug::prelude::*;
+use nih_plug_egui::EguiState;
 use std::f32::consts::PI;
 use std::sync::Arc;
 
-// This is a shortened version of the gain example with most comments removed, check out
-// https://github.com/robbert-vdh/nih-plug/blob/master/plugins/examples/gain/src/lib.rs to get
-// started
+mod editor;
 
 struct Centered {
     params: Arc<CenteredParams>,
+    stereo_data: Arc<(AtomicF32, AtomicF32)>,
+    correcting_angle: Arc<AtomicF32>,
 }
 
 #[derive(Params)]
@@ -18,12 +20,17 @@ struct CenteredParams {
     /// gain parameter is stored as linear gain while the values are displayed in decibels.
     #[id = "gain"]
     pub gain: FloatParam,
+
+    #[persist = "editor-state"]
+    pub editor_state: Arc<EguiState>,
 }
 
 impl Default for Centered {
     fn default() -> Self {
         Self {
             params: Arc::new(CenteredParams::default()),
+            stereo_data: Default::default(),
+            correcting_angle: Default::default(),
         }
     }
 }
@@ -37,11 +44,16 @@ impl Default for CenteredParams {
             gain: FloatParam::new(
                 "Gain",
                 0.0,
-                FloatRange::Linear { min: -180.0, max: 180.0 },
+                FloatRange::Linear {
+                    min: -180.0,
+                    max: 180.0,
+                },
             )
             // Because the gain parameter is stored as linear gain instead of storing the value as
             // decibels, we need logarithmic smoothing
             .with_step_size(0.1),
+
+            editor_state: EguiState::from_size(600, 480),
         }
     }
 }
@@ -87,6 +99,14 @@ impl Plugin for Centered {
         self.params.clone()
     }
 
+    fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        editor(
+            self.params.clone(),
+            self.stereo_data.clone(),
+            self.correcting_angle.clone(),
+        )
+    }
+
     fn initialize(
         &mut self,
         _audio_io_layout: &AudioIOLayout,
@@ -110,22 +130,25 @@ impl Plugin for Centered {
         _aux: &mut AuxiliaryBuffers,
         _context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
-        let t = |x: f32, y: f32| {
-            ((y/x).atan() * 180.0) / PI
-        };
+        let t = |x: f32, y: f32| ((y.abs() / x.abs()).atan() * 180.0) / PI;
 
-        let pan_deg = (-45.0 - buffer.iter_samples().map(|mut s| {
-            t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap())
-        })
-        .zip((1..))
-        .fold(0., |acc, (i, d)| (i + acc * (d - 1) as f32) / d as f32))
+        let pan_deg = (-45.0
+            - buffer
+                .iter_samples()
+                .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
+                .filter(|s| !s.is_nan())
+                .zip((1..))
+                .fold(0., |acc, (i, d)| (i + acc * (d - 1) as f32) / d as f32))
         .to_radians();
+        self.correcting_angle
+            .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
 
         for mut channel_samples in buffer.iter_samples() {
             let left = *channel_samples.get_mut(0).unwrap();
             let right = *channel_samples.get_mut(1).unwrap();
             *channel_samples.get_mut(0).unwrap() = (left * pan_deg.cos()) - (right * pan_deg.sin());
-            *channel_samples.get_mut(1).unwrap() = (left * -pan_deg.sin()) - (right * pan_deg.cos());
+            *channel_samples.get_mut(1).unwrap() =
+                (left * -pan_deg.sin()) - (right * pan_deg.cos());
         }
 
         ProcessStatus::Normal
