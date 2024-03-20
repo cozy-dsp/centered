@@ -7,7 +7,7 @@ mod editor;
 
 pub const GONIO_NUM_SAMPLES: usize = 1000;
 
-struct Centered {
+pub struct Centered {
     params: Arc<CenteredParams>,
     stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
     stereo_data_idx: usize,
@@ -129,7 +129,7 @@ impl Plugin for Centered {
                     // this never approaches 2^23 so it doesn't matter
                     acc.mul_add((d - 1) as f32, i) / d as f32
                 }))
-                * self.params.correction_amount.modulated_normalized_value())
+            * self.params.correction_amount.modulated_normalized_value())
         .to_radians();
         self.correcting_angle
             .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
