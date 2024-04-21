@@ -128,9 +128,8 @@ impl Plugin for Centered {
                 .fold(0.0_f32, |acc, (i, d)| {
                     // this never approaches 2^23 so it doesn't matter
                     acc.mul_add((d - 1) as f32, i) / d as f32
-                }))
-            * self.params.correction_amount.modulated_normalized_value())
-        .to_radians();
+                })))
+        .to_radians() * self.params.correction_amount.modulated_normalized_value();
         self.correcting_angle
             .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
 
