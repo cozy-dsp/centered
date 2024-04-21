@@ -3,15 +3,16 @@ use std::{
     sync::Arc,
 };
 
-use cozy_ui::{util::CIRCLE_POINTS, widgets::knob::knob};
-use map_range::MapRange;
+use cozy_ui::{util::generate_arc, widgets::knob::knob};
 use nih_plug::{
     editor::Editor,
     params::{smoothing::AtomicF32, Param},
 };
 use nih_plug_egui::{
     create_egui_editor,
-    egui::{epaint::{CubicBezierShape, PathShape}, pos2, CentralPanel, Color32, Painter, RichText, Shape, Stroke, TopBottomPanel, Vec2},
+    egui::{
+        CentralPanel, Color32, RichText, Stroke, TopBottomPanel, Vec2,
+    },
 };
 
 const DEG_45: f32 = 45.0_f32 * (PI / 180.0_f32);
@@ -31,50 +32,49 @@ pub fn editor(
         params.editor_state.clone(),
         (),
         |ctx, ()| {
+            cozy_ui::setup(ctx);
         },
         move |ctx, setter, ()| {
             let correcting_angle = (correcting_angle
-            .load(std::sync::atomic::Ordering::Relaxed)
-            .to_degrees() + 90.0) * -1.0;
+                .load(std::sync::atomic::Ordering::Relaxed)) + 45.0_f32.to_radians() * params.correction_amount.modulated_normalized_value();
             TopBottomPanel::top("menu").show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(format!(
-                        "pan angle: {}",
-                        180.0 + correcting_angle
-                    ));
+                    ui.label(format!("pan angle: {}", correcting_angle.to_degrees()));
                 })
             });
             TopBottomPanel::bottom("controls").show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.vertical_centered(|ui| {
                         ui.group(|ui| {
-                            knob(
-                                ui,
-                                "knob_correct_amount",
-                                25.0,
-                                |v| match v {
-                                    Some(v) => {
-                                        setter
-                                            .set_parameter_normalized(&params.correction_amount, v);
-                                        v
-                                    }
-                                    None => params.correction_amount.modulated_normalized_value(),
-                                },
-                                || setter.begin_set_parameter(&params.correction_amount),
-                                || setter.end_set_parameter(&params.correction_amount),
-                                params.correction_amount.default_normalized_value(),
+                            ui.add(
+                                knob(
+                                    "knob_correct_amount",
+                                    50.0,
+                                    |v| match v {
+                                        Some(v) => {
+                                            setter.set_parameter_normalized(
+                                                &params.correction_amount,
+                                                v,
+                                            );
+                                            v
+                                        }
+                                        None => {
+                                            params.correction_amount.unmodulated_normalized_value()
+                                        }
+                                    },
+                                    || setter.begin_set_parameter(&params.correction_amount),
+                                    || setter.end_set_parameter(&params.correction_amount),
+                                )
+                                .label(RichText::new(params.correction_amount.name()).strong())
+                                .default_value(params.correction_amount.default_normalized_value())
+                                .modulated_value(params.correction_amount.modulated_normalized_value())
                             );
-                            ui.label(RichText::new(params.correction_amount.name()).strong());
                         });
                     })
                 })
             });
             CentralPanel::default().show(ctx, |ui| {
-                let painter = Painter::new(
-                    ui.ctx().clone(),
-                    ui.layer_id(),
-                    ui.available_rect_before_wrap(),
-                );
+                let painter = ui.painter();
                 let center = painter.clip_rect().center();
 
                 for (left, right) in stereo_data.iter() {
@@ -112,47 +112,8 @@ pub fn editor(
 
                     painter.circle_filled(center + offset, 1.5, Color32::RED);
 
-                    let center = kurbo::Point {
-                        x: center.x as f64,
-                        y: center.y as f64
-                    };
-
-                    let start = center + kurbo::Vec2 {
-                        x: 100.0 * 180.0_f64.to_radians().cos(),
-                        y: 100.0 * 180.0_f64.to_radians().sin() 
-                    };
-
-                    let p = kurbo::Arc {
-                        center,
-                        radii: kurbo::Vec2 { x: 100.0, y: 100.0 },
-                        start_angle: 180.0_f64.to_radians(),
-                        sweep_angle: correcting_angle.to_radians() as f64,
-                        x_rotation: 0.0
-                    };
-
-                    let mut p_start = pos2(start.x as f32, start.y as f32);
-
-                    p.to_cubic_beziers(0.01, |x, y, z| {
-                        if x.is_nan() {
-                            return;
-                        }
-
-                        let p1 = pos2(x.x as f32, x.y as f32);
-                        let p2 = pos2(y.x as f32, y.y as f32);
-                        let p3 = pos2(z.x as f32, z.y as f32);
-
-                        painter.add(Shape::CubicBezier(CubicBezierShape {
-                            points: [p_start, p1, p2, p3],
-                            closed: false,
-                            fill: Color32::TRANSPARENT,
-                            stroke: Stroke::new(2.5, Color32::GREEN)
-                        }));
-
-                        p_start = p3;
-                    })
-
+                    generate_arc(&painter, center, 100.0, 90.0_f32.to_radians(), 90.0_f32.to_radians() + correcting_angle, Stroke::new(2.5, Color32::GREEN))
                 }
-                ui.expand_to_include_rect(painter.clip_rect());
             });
         },
     )
