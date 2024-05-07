@@ -10,12 +10,19 @@ description = "an attempt at recentering stereo signals"
 [workspace]
 members = ["xtask"]
 
+[features]
+editor = ["nih_plug/standalone"]
+
 [lib]
 crate-type = ["cdylib", "lib"]
 
+[[bin]]
+name = "centered"
+required-features = ["editor"]
+
 [dependencies]
 cozy-ui = { git = "https://vcs.cozydsp.space/cozy-dsp/cozy-ui.git", version = "0.1.0" }
-nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs", "standalone"]}
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs"]}
 nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
 egui_extras = { version = "0.27", features = ["image"] }
 image = { version = "0.24.9", default-features = false, features = ["png"] }

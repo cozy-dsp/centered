@@ -129,7 +129,7 @@ pub fn editor(
                     painter.circle_filled(center + offset, 1.5, Color32::RED);
 
                     generate_arc(
-                        &painter,
+                        painter,
                         center,
                         100.0,
                         90.0_f32.to_radians(),
