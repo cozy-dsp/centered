@@ -13,7 +13,10 @@ use nih_plug::{
 };
 use nih_plug_egui::{
     create_egui_editor,
-    egui::{include_image, CentralPanel, Color32, RichText, Stroke, TopBottomPanel, Vec2, Window},
+    egui::{
+        include_image, CentralPanel, Color32, Frame, RichText, Sense, Stroke, TopBottomPanel, Vec2,
+        Window,
+    },
 };
 
 const DEG_45: f32 = 45.0_f32 * (PI / 180.0_f32);
@@ -90,53 +93,61 @@ pub fn editor(
                 })
             });
             CentralPanel::default().show(ctx, |ui| {
-                let painter = ui.painter();
-                let center = painter.clip_rect().center();
+                Frame::canvas(ui.style())
+                    .stroke(Stroke::new(2.0, Color32::DARK_GRAY))
+                    .show(ui, |ui| {
+                        let (rect, _) = ui.allocate_at_least(
+                            ui.available_size_before_wrap(),
+                            Sense::focusable_noninteractive(),
+                        );
+                        let painter = ui.painter_at(rect);
+                        let center = rect.center();
 
-                for (left, right) in stereo_data.iter() {
-                    // treating left and right as the x and y, perhaps swapping these would yield some results?
-                    let y = left.load(std::sync::atomic::Ordering::Relaxed);
-                    let x = right.load(std::sync::atomic::Ordering::Relaxed);
+                        for (left, right) in stereo_data.iter() {
+                            // treating left and right as the x and y, perhaps swapping these would yield some results?
+                            let y = left.load(std::sync::atomic::Ordering::Relaxed);
+                            let x = right.load(std::sync::atomic::Ordering::Relaxed);
 
-                    // pythagorus rolling in his tomb, the ln is natual log, the data looks like a nifty flower if you do this
-                    let radius = x.hypot(y).ln();
-                    let mut angle = (y / x).atan();
+                            // pythagorus rolling in his tomb, the ln is natual log, the data looks like a nifty flower if you do this
+                            let radius = x.hypot(y).ln();
+                            let mut angle = (y / x).atan();
 
-                    match (x, y) {
-                        // y != 0.0 doesn't produce correct results for some reason. floats!
-                        #[allow(clippy::double_comparisons)]
-                        (x, y) if (y < 0.0 || y > 0.0) && x < 0.0 => {
-                            angle += PI;
+                            match (x, y) {
+                                // y != 0.0 doesn't produce correct results for some reason. floats!
+                                #[allow(clippy::double_comparisons)]
+                                (x, y) if (y < 0.0 || y > 0.0) && x < 0.0 => {
+                                    angle += PI;
+                                }
+                                (x, y) if x > 0.0 && y < 0.0 => {
+                                    angle += TAU;
+                                }
+                                _ => {}
+                            }
+
+                            if x == 0.0 {
+                                angle = if y > 0.0 { DEG_90 } else { DEG_270 }
+                            } else if y == 0.0 {
+                                angle = if x > 0.0 { 0.0 } else { PI }
+                            }
+
+                            angle += DEG_45;
+
+                            let (sin, cos) = angle.sin_cos();
+
+                            let offset = Vec2::new(radius * cos, radius * sin) * 10.0;
+
+                            painter.circle_filled(center + offset, 1.5, Color32::RED);
+
+                            generate_arc(
+                                &painter,
+                                center,
+                                100.0,
+                                90.0_f32.to_radians(),
+                                90.0_f32.to_radians() + correcting_angle,
+                                Stroke::new(2.5, Color32::GREEN),
+                            )
                         }
-                        (x, y) if x > 0.0 && y < 0.0 => {
-                            angle += TAU;
-                        }
-                        _ => {}
-                    }
-
-                    if x == 0.0 {
-                        angle = if y > 0.0 { DEG_90 } else { DEG_270 }
-                    } else if y == 0.0 {
-                        angle = if x > 0.0 { 0.0 } else { PI }
-                    }
-
-                    angle += DEG_45;
-
-                    let (sin, cos) = angle.sin_cos();
-
-                    let offset = Vec2::new(radius * cos, radius * sin) * 10.0;
-
-                    painter.circle_filled(center + offset, 1.5, Color32::RED);
-
-                    generate_arc(
-                        painter,
-                        center,
-                        100.0,
-                        90.0_f32.to_radians(),
-                        90.0_f32.to_radians() + correcting_angle,
-                        Stroke::new(2.5, Color32::GREEN),
-                    )
-                }
+                    });
             });
 
             Window::new("DEBUG")
