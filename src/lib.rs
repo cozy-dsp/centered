@@ -119,7 +119,7 @@ impl Plugin for Centered {
         let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
 
         #[allow(clippy::cast_precision_loss)]
-        let pan_deg = ((-45.0
+        let pan_deg = (-45.0
             - buffer
                 .iter_samples()
                 .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
@@ -128,8 +128,9 @@ impl Plugin for Centered {
                 .fold(0.0_f32, |acc, (i, d)| {
                     // this never approaches 2^23 so it doesn't matter
                     acc.mul_add((d - 1) as f32, i) / d as f32
-                })))
-        .to_radians() * self.params.correction_amount.modulated_normalized_value();
+                }))
+        .to_radians()
+            * self.params.correction_amount.modulated_normalized_value();
         self.correcting_angle
             .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
 

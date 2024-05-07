@@ -15,13 +15,14 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 cozy-ui = { git = "https://vcs.cozydsp.space/cozy-dsp/cozy-ui.git", version = "0.1.0" }
-# Remove the `assert_process_allocs` feature to allow allocations on the audio
-# thread in debug builds.
-nih_plug = { git = "https://github.com/murl-digital/nih-plug.git", features = ["assert_process_allocs", "standalone"], branch = "feature/bump-dependencies"}
-nih_plug_egui = { git = "https://github.com/murl-digital/nih-plug.git", branch = "feature/bump-dependencies" }
-# Uncomment the below line to disable the on-by-default VST3 feature to remove
-# the GPL compatibility requirement
-# nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", default_features = false, features = ["assert_process_allocs"] }
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs", "standalone"]}
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
+egui_extras = { version = "0.27", features = ["image"] }
+image = { version = "0.24.9", default-features = false, features = ["png"] }
+
+[build-dependencies]
+anyhow = "1.0.81"
+vergen = { version = "8.3.1", features = ["git", "gitcl"] }
 
 [profile.release]
 lto = "thin"
