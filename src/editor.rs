@@ -50,12 +50,11 @@ pub fn editor(
         },
         move |ctx, setter, state| {
             let corr_angle_debug = correcting_angle.load(Ordering::Relaxed);
-            let correcting_angle = if pre_peak_meter.0.load(Ordering::Relaxed).is_normal() && pre_peak_meter.1.load(Ordering::Relaxed).is_normal()  {
-                correcting_angle.load(Ordering::Relaxed)
-                    + (90.0_f32.to_radians()
-                        * params.correction_amount.modulated_normalized_value())
-            } else {
+            let correcting_angle = if corr_angle_debug == 0.0 {
                 0.0
+            } else {
+                correcting_angle.load(Ordering::Relaxed)
+                + (90.0_f32.to_radians() * params.correction_amount.modulated_normalized_value())
             };
 
             TopBottomPanel::top("menu").show(ctx, |ui| {
@@ -240,7 +239,11 @@ pub fn editor(
                 .vscroll(true)
                 .open(&mut state.show_debug)
                 .show(ctx, |ui| {
-                    ui.label(format!("pan angle: {} ({} rad pre-offset)", correcting_angle.to_degrees(), corr_angle_debug));
+                    ui.label(format!(
+                        "pan angle: {} ({} rad pre-offset)",
+                        correcting_angle.to_degrees(),
+                        corr_angle_debug
+                    ));
                 });
 
             Window::new("ABOUT")

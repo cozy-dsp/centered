@@ -141,7 +141,14 @@ impl Plugin for Centered {
             );
         }
 
-        let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
+        let t = |x: f32, y: f32| {
+            // if the input is silent, bias the pan towards the center. the math gets weird if you don't do this
+            if x == 0.0 && y == 0.0 {
+                -45.0
+            } else {
+                (y.abs() / x.abs()).atan().to_degrees()
+            }
+        };
 
         #[allow(clippy::cast_precision_loss)]
         let pan_deg = (-45.0
