@@ -1,6 +1,7 @@
 use std::{
     f32::consts::PI,
-    sync::Arc, time::{Duration, Instant},
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use cozy_ui::{
@@ -9,12 +10,14 @@ use cozy_ui::{
 };
 use nih_plug::{
     editor::Editor,
-    params::{smoothing::AtomicF32, Param}, util::gain_to_db,
+    params::{smoothing::AtomicF32, Param},
+    util::gain_to_db,
 };
 use nih_plug_egui::{
     create_egui_editor,
     egui::{
-        include_image, pos2, remap_clamp, vec2, Align2, CentralPanel, Color32, FontId, Frame, Id, Rect, RichText, Rounding, Sense, Stroke, TopBottomPanel, Ui, Vec2, Window
+        include_image, pos2, remap_clamp, vec2, Align2, CentralPanel, Color32, FontId, Frame, Id,
+        Rect, RichText, Rounding, Sense, Stroke, TopBottomPanel, Ui, Vec2, Window,
     },
 };
 use once_cell::sync::Lazy;
@@ -102,32 +105,77 @@ pub fn editor(
                             Sense::focusable_noninteractive(),
                         );
 
-                        let scope_rect = Rect::from_center_size(rect.center(), Vec2::splat(rect.height())).shrink(20.0);
-        
+                        let scope_rect =
+                            Rect::from_center_size(rect.center(), Vec2::splat(rect.height()))
+                                .shrink(20.0);
 
                         let painter = ui.painter_at(rect);
                         let center = rect.center();
 
-                        painter.line_segment([scope_rect.center_top(), scope_rect.center_bottom()], Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.5)));
-                        painter.line_segment([scope_rect.left_center(), scope_rect.right_center()], Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.5)));
+                        painter.line_segment(
+                            [scope_rect.center_top(), scope_rect.center_bottom()],
+                            Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.5)),
+                        );
+                        painter.line_segment(
+                            [scope_rect.left_center(), scope_rect.right_center()],
+                            Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.5)),
+                        );
 
-                        painter.line_segment([scope_rect.min + (scope_rect.size() * 0.25), scope_rect.max - (scope_rect.size() * 0.25)], Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.55)));
-                        painter.line_segment([scope_rect.min + (scope_rect.size() * vec2(0.75, 0.25)), scope_rect.max - (scope_rect.size() * vec2(0.75, 0.25))], Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.55)));
+                        painter.line_segment(
+                            [
+                                scope_rect.min + (scope_rect.size() * 0.25),
+                                scope_rect.max - (scope_rect.size() * 0.25),
+                            ],
+                            Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.55)),
+                        );
+                        painter.line_segment(
+                            [
+                                scope_rect.min + (scope_rect.size() * vec2(0.75, 0.25)),
+                                scope_rect.max - (scope_rect.size() * vec2(0.75, 0.25)),
+                            ],
+                            Stroke::new(1.5, Color32::GRAY.gamma_multiply(0.55)),
+                        );
 
-                        painter.line_segment([scope_rect.center_top(), scope_rect.left_center()], Stroke::new(1.5, Color32::GRAY));
-                        painter.line_segment([scope_rect.left_center(), scope_rect.center_bottom()], Stroke::new(1.5, Color32::GRAY));
-                        painter.line_segment([scope_rect.center_bottom(), scope_rect.right_center()], Stroke::new(1.5, Color32::GRAY));
-                        painter.line_segment([scope_rect.right_center(), scope_rect.center_top()], Stroke::new(1.5, Color32::GRAY));
+                        painter.line_segment(
+                            [scope_rect.center_top(), scope_rect.left_center()],
+                            Stroke::new(1.5, Color32::GRAY),
+                        );
+                        painter.line_segment(
+                            [scope_rect.left_center(), scope_rect.center_bottom()],
+                            Stroke::new(1.5, Color32::GRAY),
+                        );
+                        painter.line_segment(
+                            [scope_rect.center_bottom(), scope_rect.right_center()],
+                            Stroke::new(1.5, Color32::GRAY),
+                        );
+                        painter.line_segment(
+                            [scope_rect.right_center(), scope_rect.center_top()],
+                            Stroke::new(1.5, Color32::GRAY),
+                        );
 
                         let (translate_sin, translate_cos) = *TRANSLATE_SIN_COS;
 
-                        for (left, right) in stereo_data.iter().map(|(left, right)| (left.load(std::sync::atomic::Ordering::Relaxed).clamp(-1.0, 1.0), right.load(std::sync::atomic::Ordering::Relaxed).clamp(-1.0, 1.0))) {
-
+                        for (left, right) in stereo_data.iter().map(|(left, right)| {
+                            (
+                                left.load(std::sync::atomic::Ordering::Relaxed)
+                                    .clamp(-1.0, 1.0),
+                                right
+                                    .load(std::sync::atomic::Ordering::Relaxed)
+                                    .clamp(-1.0, 1.0),
+                            )
+                        }) {
                             let dot_x = left * translate_cos - right * translate_sin;
                             let dot_y = left * translate_sin + right * translate_cos;
-                            let offset = vec2(dot_x * scope_rect.width() / PI, dot_y * scope_rect.height() / PI);
+                            let offset = vec2(
+                                dot_x * scope_rect.width() / PI,
+                                dot_y * scope_rect.height() / PI,
+                            );
 
-                            painter.circle_filled(center + offset, 1.5, Color32::WHITE.gamma_multiply((left.abs() + right.abs()) / 2.0));
+                            painter.circle_filled(
+                                center + offset,
+                                1.5,
+                                Color32::WHITE.gamma_multiply((left.abs() + right.abs()) / 2.0),
+                            );
 
                             generate_arc(
                                 &painter,
@@ -139,12 +187,46 @@ pub fn editor(
                             )
                         }
 
-                        let peak_rect_pre = Rect::from_center_size(pos2(rect.left() + (rect.width() * 0.1), rect.center().y), vec2(40.0, rect.height() * 0.8));
-                        draw_peak_meters(ui, peak_rect_pre, gain_to_db(pre_peak_meter.0.load(std::sync::atomic::Ordering::Relaxed)), gain_to_db(pre_peak_meter.1.load(std::sync::atomic::Ordering::Relaxed)), Duration::from_millis(300));
-                        ui.painter().text(peak_rect_pre.center_bottom() + vec2(0.0, 10.0), Align2::CENTER_CENTER, "PRE", FontId::monospace(10.0), Color32::GRAY);
-                        let peak_rect_post = Rect::from_center_size(pos2(rect.left() + (rect.width() * 0.9), rect.center().y), vec2(40.0, rect.height() * 0.8));
-                        draw_peak_meters(ui, peak_rect_post, gain_to_db(post_peak_meter.0.load(std::sync::atomic::Ordering::Relaxed)), gain_to_db(post_peak_meter.1.load(std::sync::atomic::Ordering::Relaxed)), Duration::from_millis(300));
-                        ui.painter().text(peak_rect_post.center_bottom() + vec2(0.0, 10.0), Align2::CENTER_CENTER, "POST", FontId::monospace(10.0), Color32::GRAY);
+                        let peak_rect_pre = Rect::from_center_size(
+                            pos2(rect.left() + (rect.width() * 0.1), rect.center().y),
+                            vec2(40.0, rect.height() * 0.8),
+                        );
+                        draw_peak_meters(
+                            ui,
+                            peak_rect_pre,
+                            gain_to_db(pre_peak_meter.0.load(std::sync::atomic::Ordering::Relaxed)),
+                            gain_to_db(pre_peak_meter.1.load(std::sync::atomic::Ordering::Relaxed)),
+                            Duration::from_millis(300),
+                        );
+                        ui.painter().text(
+                            peak_rect_pre.center_bottom() + vec2(0.0, 10.0),
+                            Align2::CENTER_CENTER,
+                            "PRE",
+                            FontId::monospace(10.0),
+                            Color32::GRAY,
+                        );
+                        let peak_rect_post = Rect::from_center_size(
+                            pos2(rect.left() + (rect.width() * 0.9), rect.center().y),
+                            vec2(40.0, rect.height() * 0.8),
+                        );
+                        draw_peak_meters(
+                            ui,
+                            peak_rect_post,
+                            gain_to_db(
+                                post_peak_meter.0.load(std::sync::atomic::Ordering::Relaxed),
+                            ),
+                            gain_to_db(
+                                post_peak_meter.1.load(std::sync::atomic::Ordering::Relaxed),
+                            ),
+                            Duration::from_millis(300),
+                        );
+                        ui.painter().text(
+                            peak_rect_post.center_bottom() + vec2(0.0, 10.0),
+                            Align2::CENTER_CENTER,
+                            "POST",
+                            FontId::monospace(10.0),
+                            Color32::GRAY,
+                        );
                     });
             });
 
@@ -177,7 +259,13 @@ pub fn editor(
     )
 }
 
-fn draw_peak_meters(ui: &Ui, bounds: Rect, level_l_dbfs: f32, level_r_dbfs: f32, hold_time: Duration) {
+fn draw_peak_meters(
+    ui: &Ui,
+    bounds: Rect,
+    level_l_dbfs: f32,
+    level_r_dbfs: f32,
+    hold_time: Duration,
+) {
     const MIN_DB: f32 = -90.0;
     const MAX_DB: f32 = 20.0;
 
@@ -196,13 +284,17 @@ fn draw_peak_meters(ui: &Ui, bounds: Rect, level_l_dbfs: f32, level_r_dbfs: f32,
     let last_held_peak_value_r = ui.memory_mut(|r| r.data.get_temp(last_held_r_id));
 
     let now = Instant::now();
-    let time_logic = |now: Instant, level: f32, peak_level: f32, peak_time: Option<Instant>, peak_id, last_held_id| {
+    let time_logic = |now: Instant,
+                      level: f32,
+                      peak_level: f32,
+                      peak_time: Option<Instant>,
+                      peak_id,
+                      last_held_id| {
         let mut peak_level = peak_level;
 
         if level > peak_level || peak_time.is_none() {
             peak_level = level;
-            ui.memory_mut(|r|
-                r.data.insert_temp(last_held_id, now));
+            ui.memory_mut(|r| r.data.insert_temp(last_held_id, now));
         }
 
         if let Some(peak_time) = peak_time {
@@ -216,19 +308,69 @@ fn draw_peak_meters(ui: &Ui, bounds: Rect, level_l_dbfs: f32, level_r_dbfs: f32,
         ui.memory_mut(|r| r.data.insert_temp(peak_id, peak_level));
     };
 
-    (time_logic)(now, level_l_dbfs, held_peak_value_db_l, last_held_peak_value_l, held_l_id, last_held_l_id);
-    (time_logic)(now, level_r_dbfs, held_peak_value_db_r, last_held_peak_value_r, held_r_id, last_held_r_id);
+    (time_logic)(
+        now,
+        level_l_dbfs,
+        held_peak_value_db_l,
+        last_held_peak_value_l,
+        held_l_id,
+        last_held_l_id,
+    );
+    (time_logic)(
+        now,
+        level_r_dbfs,
+        held_peak_value_db_r,
+        last_held_peak_value_r,
+        held_r_id,
+        last_held_r_id,
+    );
 
     let held_peak_value_db_l = ui.memory_mut(|r| *r.data.get_temp_mut_or(held_l_id, f32::MIN));
     let held_peak_value_db_r = ui.memory_mut(|r| *r.data.get_temp_mut_or(held_r_id, f32::MIN));
 
     let peak_width = (bounds.width() - 10.0) / 2.0;
-    
+
     let (l_bounds, temp) = bounds.split_left_right_at_x(bounds.left() + peak_width);
     let (_, r_bounds) = temp.split_left_right_at_x(temp.left() + 10.0);
 
-    ui.painter().rect_filled(Rect::from_two_pos(l_bounds.left_bottom(), pos2(l_bounds.right(), remap_clamp(level_l_dbfs, MIN_DB..=MAX_DB, l_bounds.bottom_up_range()))), Rounding::ZERO, Color32::GRAY);
-    ui.painter().hline(l_bounds.x_range(), remap_clamp(held_peak_value_db_l, MIN_DB..=MAX_DB, l_bounds.bottom_up_range()), Stroke::new(1.0, Color32::GRAY));
-    ui.painter().rect_filled(Rect::from_two_pos(r_bounds.left_bottom(), pos2(r_bounds.right(), remap_clamp(level_r_dbfs, MIN_DB..=MAX_DB, r_bounds.bottom_up_range()))), Rounding::ZERO, Color32::GRAY);
-    ui.painter().hline(r_bounds.x_range(), remap_clamp(held_peak_value_db_r, MIN_DB..=MAX_DB, r_bounds.bottom_up_range()), Stroke::new(1.0, Color32::GRAY));
+    ui.painter().rect_filled(
+        Rect::from_two_pos(
+            l_bounds.left_bottom(),
+            pos2(
+                l_bounds.right(),
+                remap_clamp(level_l_dbfs, MIN_DB..=MAX_DB, l_bounds.bottom_up_range()),
+            ),
+        ),
+        Rounding::ZERO,
+        Color32::GRAY,
+    );
+    ui.painter().hline(
+        l_bounds.x_range(),
+        remap_clamp(
+            held_peak_value_db_l,
+            MIN_DB..=MAX_DB,
+            l_bounds.bottom_up_range(),
+        ),
+        Stroke::new(1.0, Color32::GRAY),
+    );
+    ui.painter().rect_filled(
+        Rect::from_two_pos(
+            r_bounds.left_bottom(),
+            pos2(
+                r_bounds.right(),
+                remap_clamp(level_r_dbfs, MIN_DB..=MAX_DB, r_bounds.bottom_up_range()),
+            ),
+        ),
+        Rounding::ZERO,
+        Color32::GRAY,
+    );
+    ui.painter().hline(
+        r_bounds.x_range(),
+        remap_clamp(
+            held_peak_value_db_r,
+            MIN_DB..=MAX_DB,
+            r_bounds.bottom_up_range(),
+        ),
+        Stroke::new(1.0, Color32::GRAY),
+    );
 }

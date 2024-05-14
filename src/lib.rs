@@ -89,12 +89,12 @@ impl Plugin for Centered {
     type BackgroundTask = ();
 
     fn initialize(
-            &mut self,
-            audio_io_layout: &AudioIOLayout,
-            buffer_config: &BufferConfig,
-            context: &mut impl InitContext<Self>,
-        ) -> bool {
-            self.peak_meter_decay_weight = 0.25f64
+        &mut self,
+        _audio_io_layout: &AudioIOLayout,
+        buffer_config: &BufferConfig,
+        _context: &mut impl InitContext<Self>,
+    ) -> bool {
+        self.peak_meter_decay_weight = 0.25f64
             .powf((buffer_config.sample_rate as f64 * PEAK_METER_DECAY_MS / 1000.).recip())
             as f32;
 
@@ -127,20 +127,18 @@ impl Plugin for Centered {
                 let channel_right = *channel_samples.get_mut(1).unwrap();
 
                 let (left, right) = &self.stereo_data[self.stereo_data_idx];
-                left.store(
-                    channel_left,
-                    std::sync::atomic::Ordering::Relaxed,
-                );
-                right.store(
-                    channel_right,
-                    std::sync::atomic::Ordering::Relaxed,
-                );
+                left.store(channel_left, std::sync::atomic::Ordering::Relaxed);
+                right.store(channel_right, std::sync::atomic::Ordering::Relaxed);
 
                 self.stereo_data_idx += 1;
                 self.stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
             }
 
-            calc_peak(buffer, [&self.pre_peak_meter.0, &self.pre_peak_meter.1], self.peak_meter_decay_weight);
+            calc_peak(
+                buffer,
+                [&self.pre_peak_meter.0, &self.pre_peak_meter.1],
+                self.peak_meter_decay_weight,
+            );
         }
 
         let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
@@ -169,7 +167,11 @@ impl Plugin for Centered {
             *channel_samples.get_mut(1).unwrap() = left.mul_add(-pan_sin, -(right * pan_cos));
         }
 
-        calc_peak(buffer, [&self.post_peak_meter.0, &self.post_peak_meter.1], self.peak_meter_decay_weight);
+        calc_peak(
+            buffer,
+            [&self.post_peak_meter.0, &self.post_peak_meter.1],
+            self.peak_meter_decay_weight,
+        );
 
         ProcessStatus::Normal
     }
