@@ -10,6 +10,8 @@ const PEAK_METER_DECAY_MS: f64 = 150.0;
 
 pub struct Centered {
     params: Arc<CenteredParams>,
+    sample_rate: f32,
+    correction_angle_smoother: Smoother<f32>,
     stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
     stereo_data_idx: usize,
     pre_peak_meter: Arc<(AtomicF32, AtomicF32)>,
@@ -23,6 +25,8 @@ struct CenteredParams {
     /// The amount to correct the input by, represented as a percent
     #[id = "correction-amount"]
     pub correction_amount: FloatParam,
+    #[id = "reaction_time"]
+    pub reaction_time: FloatParam,
 
     #[persist = "editor-state"]
     pub editor_state: Arc<EguiState>,
@@ -32,6 +36,8 @@ impl Default for Centered {
     fn default() -> Self {
         Self {
             params: Arc::new(CenteredParams::default()),
+            correction_angle_smoother: Smoother::default(),
+            sample_rate: 0.0,
             // evil hack because AtomicF32 doesn't implement copy
             stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
             pre_peak_meter: Arc::new(Default::default()),
@@ -55,6 +61,17 @@ impl Default for CenteredParams {
                 },
             )
             .with_unit("%")
+            .with_step_size(0.1),
+
+            reaction_time: FloatParam::new(
+                "Reaction Time",
+                5.0,
+                FloatRange::Linear {
+                    min: 0.0,
+                    max: 25.0,
+                },
+            )
+            .with_unit(" ms")
             .with_step_size(0.1),
 
             editor_state: EguiState::from_size(600, 480),
@@ -97,8 +114,13 @@ impl Plugin for Centered {
         self.peak_meter_decay_weight = 0.25f64
             .powf((buffer_config.sample_rate as f64 * PEAK_METER_DECAY_MS / 1000.).recip())
             as f32;
+        self.sample_rate = buffer_config.sample_rate;
 
         true
+    }
+
+    fn reset(&mut self) {
+        self.correction_angle_smoother.reset(-45.0);
     }
 
     fn params(&self) -> Arc<dyn Params> {
@@ -139,7 +161,10 @@ impl Plugin for Centered {
                 [&self.pre_peak_meter.0, &self.pre_peak_meter.1],
                 self.peak_meter_decay_weight,
             );
-        }
+        };
+
+        self.correction_angle_smoother.style =
+            SmoothingStyle::Linear(self.params.reaction_time.modulated_plain_value());
 
         let t = |x: f32, y: f32| {
             // if the input is silent, bias the pan towards the center. the math gets weird if you don't do this
@@ -150,23 +175,25 @@ impl Plugin for Centered {
             }
         };
 
-        #[allow(clippy::cast_precision_loss)]
-        let pan_deg = (-45.0
-            - buffer
-                .iter_samples()
-                .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
-                .filter(|s| !s.is_nan())
-                .zip(1..)
-                .fold(0.0_f32, |acc, (i, d)| {
-                    // this never approaches 2^23 so it doesn't matter
-                    acc.mul_add((d - 1) as f32, i) / d as f32
-                }))
-        .to_radians()
-            * self.params.correction_amount.modulated_normalized_value();
-        self.correcting_angle
-            .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
+        let average_angle = buffer
+            .iter_samples()
+            .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
+            .filter(|s| !s.is_nan())
+            .zip(1..)
+            .fold(0.0_f32, |acc, (i, d)| {
+                // this never approaches 2^23 so it doesn't matter
+                acc.mul_add((d - 1) as f32, i) / d as f32
+            });
+        self.correction_angle_smoother
+            .set_target(self.sample_rate, average_angle);
 
         for mut channel_samples in buffer.iter_samples() {
+            #[allow(clippy::cast_precision_loss)]
+            let pan_deg = (-45.0 - self.correction_angle_smoother.next()).to_radians()
+                * self.params.correction_amount.modulated_normalized_value();
+            self.correcting_angle
+                .store(pan_deg, std::sync::atomic::Ordering::Relaxed);
+
             let left = *channel_samples.get_mut(0).unwrap();
             let right = *channel_samples.get_mut(1).unwrap();
             let (pan_sin, pan_cos) = pan_deg.sin_cos();

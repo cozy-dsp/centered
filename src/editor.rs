@@ -5,6 +5,7 @@ use std::{
 };
 
 use cozy_ui::{
+    centered,
     util::{generate_arc, get_set::Operation},
     widgets::knob::knob,
 };
@@ -16,7 +17,9 @@ use nih_plug::{
 use nih_plug_egui::{
     create_egui_editor,
     egui::{
-        include_image, pos2, remap_clamp, vec2, Align2, CentralPanel, Color32, FontData, FontDefinitions, FontFamily, FontId, Frame, Id, Rect, RichText, Rounding, Sense, Stroke, TopBottomPanel, Ui, Vec2, Window
+        include_image, pos2, remap_clamp, vec2, Align2, CentralPanel, Color32, FontData,
+        FontDefinitions, FontFamily, FontId, Frame, Id, Rect, RichText, Rounding, Sense, Stroke,
+        TopBottomPanel, Ui, Vec2, Window,
     },
 };
 use once_cell::sync::Lazy;
@@ -49,9 +52,16 @@ pub fn editor(
 
             let mut fonts = FontDefinitions::default();
 
-            fonts.font_data.insert("0x".to_string(), FontData::from_static(include_bytes!("../assets/0xProto-Regular.ttf")));
+            fonts.font_data.insert(
+                "0x".to_string(),
+                FontData::from_static(include_bytes!("../assets/0xProto-Regular.ttf")),
+            );
 
-            fonts.families.entry(nih_plug_egui::egui::FontFamily::Name("0x".into())).or_default().insert(0, "0x".to_string());
+            fonts
+                .families
+                .entry(nih_plug_egui::egui::FontFamily::Name("0x".into()))
+                .or_default()
+                .insert(0, "0x".to_string());
             ctx.set_fonts(fonts);
         },
         move |ctx, setter, state| {
@@ -60,7 +70,8 @@ pub fn editor(
                 0.0
             } else {
                 correcting_angle.load(Ordering::Relaxed)
-                + (90.0_f32.to_radians() * params.correction_amount.modulated_normalized_value())
+                    + (90.0_f32.to_radians()
+                        * params.correction_amount.modulated_normalized_value())
             };
 
             TopBottomPanel::top("menu").show(ctx, |ui| {
@@ -75,36 +86,52 @@ pub fn editor(
             });
 
             TopBottomPanel::bottom("controls").show(ctx, |ui| {
-                ui.horizontal_centered(|ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.group(|ui| {
-                            ui.add(
-                                knob(
-                                    "knob_correct_amount",
-                                    50.0,
-                                    |v| match v {
-                                        Operation::Get => {
-                                            params.correction_amount.unmodulated_normalized_value()
-                                        }
-                                        Operation::Set(v) => {
-                                            setter.set_parameter_normalized(
-                                                &params.correction_amount,
-                                                v,
-                                            );
-                                            v
-                                        }
-                                    },
-                                    || setter.begin_set_parameter(&params.correction_amount),
-                                    || setter.end_set_parameter(&params.correction_amount),
-                                )
-                                .label("CORRECTION AMNT")
-                                .default_value(params.correction_amount.default_normalized_value())
-                                .modulated_value(
-                                    params.correction_amount.modulated_normalized_value(),
-                                ),
-                            );
-                        });
-                    })
+                ui.horizontal(|ui| {
+                    centered(ctx, ui, |ui| {
+                        ui.add(
+                            knob(
+                                "knob_correct_amount",
+                                50.0,
+                                |v| match v {
+                                    Operation::Get => {
+                                        params.correction_amount.unmodulated_normalized_value()
+                                    }
+                                    Operation::Set(v) => {
+                                        setter
+                                            .set_parameter_normalized(&params.correction_amount, v);
+                                        v
+                                    }
+                                },
+                                || setter.begin_set_parameter(&params.correction_amount),
+                                || setter.end_set_parameter(&params.correction_amount),
+                            )
+                            .label("CORRECTION AMNT")
+                            .default_value(params.correction_amount.default_normalized_value())
+                            .modulated_value(params.correction_amount.modulated_normalized_value()),
+                        );
+
+                        ui.add(
+                            knob(
+                                "knob_reaction_time",
+                                50.0,
+                                |v| match v {
+                                    Operation::Get => {
+                                        params.reaction_time.unmodulated_normalized_value()
+                                    }
+                                    Operation::Set(v) => {
+                                        setter.set_parameter_normalized(&params.reaction_time, v);
+                                        v
+                                    }
+                                },
+                                || setter.begin_set_parameter(&params.reaction_time),
+                                || setter.end_set_parameter(&params.reaction_time),
+                            )
+                            .label("REACTION TIME")
+                            .description(params.reaction_time.to_string())
+                            .default_value(params.reaction_time.default_normalized_value())
+                            .modulated_value(params.reaction_time.modulated_normalized_value()),
+                        );
+                    });
                 })
             });
             CentralPanel::default().show(ctx, |ui| {
