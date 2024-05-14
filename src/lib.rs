@@ -1,4 +1,5 @@
 use editor::editor;
+use itertools::Either;
 use nih_plug::prelude::*;
 use nih_plug_egui::EguiState;
 use std::sync::{atomic::Ordering, Arc};
@@ -7,10 +8,13 @@ mod editor;
 
 pub const GONIO_NUM_SAMPLES: usize = 1000;
 const PEAK_METER_DECAY_MS: f64 = 150.0;
+const MAX_LOOKAHEAD_MS: f32 = 10.0;
 
 pub struct Centered {
     params: Arc<CenteredParams>,
     sample_rate: f32,
+    lookahead_buffer: Vec<(f32, f32)>,
+    lookahead_buffer_idx: usize,
     correction_angle_smoother: Smoother<f32>,
     stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
     stereo_data_idx: usize,
@@ -25,8 +29,10 @@ struct CenteredParams {
     /// The amount to correct the input by, represented as a percent
     #[id = "correction-amount"]
     pub correction_amount: FloatParam,
-    #[id = "reaction_time"]
+    #[id = "reaction-time"]
     pub reaction_time: FloatParam,
+    #[id = "lookahead"]
+    pub lookahead: FloatParam,
 
     #[persist = "editor-state"]
     pub editor_state: Arc<EguiState>,
@@ -38,6 +44,8 @@ impl Default for Centered {
             params: Arc::new(CenteredParams::default()),
             correction_angle_smoother: Smoother::default(),
             sample_rate: 0.0,
+            lookahead_buffer: Vec::default(),
+            lookahead_buffer_idx: 0,
             // evil hack because AtomicF32 doesn't implement copy
             stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
             pre_peak_meter: Arc::new(Default::default()),
@@ -69,6 +77,17 @@ impl Default for CenteredParams {
                 FloatRange::Linear {
                     min: 0.0,
                     max: 25.0,
+                },
+            )
+            .with_unit(" ms")
+            .with_step_size(0.1),
+
+            lookahead: FloatParam::new(
+                "Lookahead",
+                5.0,
+                FloatRange::Linear {
+                    min: 0.0,
+                    max: MAX_LOOKAHEAD_MS,
                 },
             )
             .with_unit(" ms")
@@ -109,12 +128,16 @@ impl Plugin for Centered {
         &mut self,
         _audio_io_layout: &AudioIOLayout,
         buffer_config: &BufferConfig,
-        _context: &mut impl InitContext<Self>,
+        context: &mut impl InitContext<Self>,
     ) -> bool {
         self.peak_meter_decay_weight = 0.25f64
             .powf((buffer_config.sample_rate as f64 * PEAK_METER_DECAY_MS / 1000.).recip())
             as f32;
         self.sample_rate = buffer_config.sample_rate;
+        self.lookahead_buffer.reserve((self.sample_rate * (MAX_LOOKAHEAD_MS / 1000.0)).round() as usize);
+        self.lookahead_buffer.resize(self.get_lookahead_samples(), (0.0, 0.0));
+
+        context.set_latency_samples(self.get_lookahead_samples() as u32);
 
         true
     }
@@ -141,7 +164,7 @@ impl Plugin for Centered {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         if self.params.editor_state.is_open() {
             for mut channel_samples in buffer.iter_samples() {
@@ -163,6 +186,23 @@ impl Plugin for Centered {
             );
         };
 
+        if self.get_lookahead_samples() != self.lookahead_buffer.len() {
+            self.lookahead_buffer.resize(self.get_lookahead_samples(), (0.0, 0.0));
+            context.set_latency_samples(self.get_lookahead_samples() as u32);
+        }
+
+        if self.params.lookahead.modulated_plain_value() > 0.0 {
+            for mut sample in buffer.iter_samples() {
+                if self.lookahead_buffer_idx >= self.lookahead_buffer.len() {
+                    self.lookahead_buffer_idx = 0;
+                }
+
+                self.lookahead_buffer[self.lookahead_buffer_idx] = (*sample.get_mut(0).unwrap(), *sample.get_mut(1).unwrap());
+
+                self.lookahead_buffer_idx += 1;
+            }
+        }
+
         self.correction_angle_smoother.style =
             SmoothingStyle::Linear(self.params.reaction_time.modulated_plain_value());
 
@@ -175,9 +215,15 @@ impl Plugin for Centered {
             }
         };
 
-        let average_angle = buffer
-            .iter_samples()
-            .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap()))
+        let iter = if self.params.lookahead.modulated_normalized_value() > 0.0 {
+            Either::Left(self.lookahead_buffer.iter().map(|(left, right)| t(*left, *right)))
+        } else {
+            Either::Right(buffer
+                .iter_samples()
+                .map(|mut s| t(*s.get_mut(0).unwrap(), *s.get_mut(1).unwrap())))
+        };
+
+        let average_angle = iter
             .filter(|s| !s.is_nan())
             .zip(1..)
             .fold(0.0_f32, |acc, (i, d)| {
@@ -208,6 +254,12 @@ impl Plugin for Centered {
         );
 
         ProcessStatus::Normal
+    }
+}
+
+impl Centered {
+    fn get_lookahead_samples(&self) -> usize {
+        (self.sample_rate * (self.params.lookahead.modulated_plain_value() / 1000.0)).round() as usize
     }
 }
 

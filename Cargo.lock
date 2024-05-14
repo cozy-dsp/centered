@@ -404,6 +404,7 @@ dependencies = [
  "cozy-ui",
  "egui_extras",
  "image",
+ "itertools",
  "nih_plug",
  "nih_plug_egui",
  "once_cell",

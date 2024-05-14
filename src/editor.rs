@@ -105,7 +105,7 @@ pub fn editor(
                                 || setter.begin_set_parameter(&params.correction_amount),
                                 || setter.end_set_parameter(&params.correction_amount),
                             )
-                            .label("CORRECTION AMNT")
+                            .label("CORRECTION")
                             .default_value(params.correction_amount.default_normalized_value())
                             .modulated_value(params.correction_amount.modulated_normalized_value()),
                         );
@@ -130,6 +130,28 @@ pub fn editor(
                             .description(params.reaction_time.to_string())
                             .default_value(params.reaction_time.default_normalized_value())
                             .modulated_value(params.reaction_time.modulated_normalized_value()),
+                        );
+
+                        ui.add(
+                            knob(
+                                "knob_lookahead",
+                                50.0,
+                                |v| match v {
+                                    Operation::Get => {
+                                        params.lookahead.unmodulated_normalized_value()
+                                    }
+                                    Operation::Set(v) => {
+                                        setter.set_parameter_normalized(&params.lookahead, v);
+                                        v
+                                    }
+                                },
+                                || setter.begin_set_parameter(&params.lookahead),
+                                || setter.end_set_parameter(&params.lookahead),
+                            )
+                            .label("LOOKAHEAD")
+                            .description(params.lookahead.to_string())
+                            .default_value(params.lookahead.default_normalized_value())
+                            .modulated_value(params.lookahead.modulated_normalized_value()),
                         );
                     });
                 })
