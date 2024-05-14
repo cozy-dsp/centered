@@ -16,8 +16,7 @@ use nih_plug::{
 use nih_plug_egui::{
     create_egui_editor,
     egui::{
-        include_image, pos2, remap_clamp, vec2, Align2, CentralPanel, Color32, FontId, Frame, Id,
-        Rect, RichText, Rounding, Sense, Stroke, TopBottomPanel, Ui, Vec2, Window,
+        include_image, pos2, remap_clamp, vec2, Align2, CentralPanel, Color32, FontData, FontDefinitions, FontFamily, FontId, Frame, Id, Rect, RichText, Rounding, Sense, Stroke, TopBottomPanel, Ui, Vec2, Window
     },
 };
 use once_cell::sync::Lazy;
@@ -47,6 +46,13 @@ pub fn editor(
         |ctx, _| {
             cozy_ui::setup(ctx);
             egui_extras::install_image_loaders(ctx);
+
+            let mut fonts = FontDefinitions::default();
+
+            fonts.font_data.insert("0x".to_string(), FontData::from_static(include_bytes!("../assets/0xProto-Regular.ttf")));
+
+            fonts.families.entry(nih_plug_egui::egui::FontFamily::Name("0x".into())).or_default().insert(0, "0x".to_string());
+            ctx.set_fonts(fonts);
         },
         move |ctx, setter, state| {
             let corr_angle_debug = correcting_angle.load(Ordering::Relaxed);
@@ -207,7 +213,7 @@ pub fn editor(
                             peak_rect_pre.center_bottom() + vec2(0.0, 10.0),
                             Align2::CENTER_CENTER,
                             "PRE",
-                            FontId::monospace(10.0),
+                            FontId::new(10.0, FontFamily::Name("0x".into())),
                             Color32::GRAY,
                         );
                         let peak_rect_post = Rect::from_center_size(
@@ -229,7 +235,7 @@ pub fn editor(
                             peak_rect_post.center_bottom() + vec2(0.0, 10.0),
                             Align2::CENTER_CENTER,
                             "POST",
-                            FontId::monospace(10.0),
+                            FontId::new(10.0, FontFamily::Name("0x".into())),
                             Color32::GRAY,
                         );
                     });
@@ -276,7 +282,7 @@ fn draw_peak_meters(
     hold_time: Duration,
 ) {
     const MIN_DB: f32 = -90.0;
-    const MAX_DB: f32 = 20.0;
+    const MAX_DB: f32 = 2.0;
 
     let level_l_dbfs = level_l_dbfs.min(MAX_DB);
     let level_r_dbfs = level_r_dbfs.min(MAX_DB);
