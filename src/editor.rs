@@ -1,6 +1,6 @@
 use std::{
     f32::consts::PI,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
 
@@ -49,8 +49,14 @@ pub fn editor(
             egui_extras::install_image_loaders(ctx);
         },
         move |ctx, setter, state| {
-            let correcting_angle = (correcting_angle.load(std::sync::atomic::Ordering::Relaxed))
-                + 45.0_f32.to_radians() * params.correction_amount.modulated_normalized_value();
+            let corr_angle_debug = correcting_angle.load(Ordering::Relaxed);
+            let correcting_angle = if pre_peak_meter.0.load(Ordering::Relaxed).is_normal() && pre_peak_meter.1.load(Ordering::Relaxed).is_normal()  {
+                correcting_angle.load(Ordering::Relaxed)
+                    + (90.0_f32.to_radians()
+                        * params.correction_amount.modulated_normalized_value())
+            } else {
+                0.0
+            };
 
             TopBottomPanel::top("menu").show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -176,16 +182,16 @@ pub fn editor(
                                 1.5,
                                 Color32::WHITE.gamma_multiply((left.abs() + right.abs()) / 2.0),
                             );
-
-                            generate_arc(
-                                &painter,
-                                center,
-                                scope_rect.height() / 4.0,
-                                90.0_f32.to_radians(),
-                                90.0_f32.to_radians() + correcting_angle,
-                                Stroke::new(2.5, cozy_ui::colors::HIGHLIGHT_COL32),
-                            )
                         }
+
+                        generate_arc(
+                            &painter,
+                            center,
+                            scope_rect.height() / 4.0,
+                            90.0_f32.to_radians() - correcting_angle,
+                            90.0_f32.to_radians(),
+                            Stroke::new(2.5, cozy_ui::colors::HIGHLIGHT_COL32),
+                        );
 
                         let peak_rect_pre = Rect::from_center_size(
                             pos2(rect.left() + (rect.width() * 0.1), rect.center().y),
@@ -234,7 +240,7 @@ pub fn editor(
                 .vscroll(true)
                 .open(&mut state.show_debug)
                 .show(ctx, |ui| {
-                    ui.label(format!("pan angle: {}", correcting_angle.to_degrees()));
+                    ui.label(format!("pan angle: {} ({} rad pre-offset)", correcting_angle.to_degrees(), corr_angle_debug));
                 });
 
             Window::new("ABOUT")
