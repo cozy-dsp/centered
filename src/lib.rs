@@ -1,16 +1,20 @@
 use editor::editor;
 use nih_plug::prelude::*;
 use nih_plug_egui::EguiState;
-use std::sync::Arc;
+use std::sync::{atomic::Ordering, Arc};
 
 mod editor;
 
 pub const GONIO_NUM_SAMPLES: usize = 1000;
+const PEAK_METER_DECAY_MS: f64 = 150.0;
 
 pub struct Centered {
     params: Arc<CenteredParams>,
     stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
     stereo_data_idx: usize,
+    pre_peak_meter: Arc<(AtomicF32, AtomicF32)>,
+    post_peak_meter: Arc<(AtomicF32, AtomicF32)>,
+    peak_meter_decay_weight: f32,
     correcting_angle: Arc<AtomicF32>,
 }
 
@@ -30,6 +34,9 @@ impl Default for Centered {
             params: Arc::new(CenteredParams::default()),
             // evil hack because AtomicF32 doesn't implement copy
             stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
+            pre_peak_meter: Arc::new(Default::default()),
+            post_peak_meter: Arc::new(Default::default()),
+            peak_meter_decay_weight: 0.0,
             stereo_data_idx: 0,
             correcting_angle: Arc::default(),
         }
@@ -81,6 +88,19 @@ impl Plugin for Centered {
     type SysExMessage = ();
     type BackgroundTask = ();
 
+    fn initialize(
+            &mut self,
+            audio_io_layout: &AudioIOLayout,
+            buffer_config: &BufferConfig,
+            context: &mut impl InitContext<Self>,
+        ) -> bool {
+            self.peak_meter_decay_weight = 0.25f64
+            .powf((buffer_config.sample_rate as f64 * PEAK_METER_DECAY_MS / 1000.).recip())
+            as f32;
+
+        true
+    }
+
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
     }
@@ -89,6 +109,8 @@ impl Plugin for Centered {
         editor(
             self.params.clone(),
             self.stereo_data.clone(),
+            self.pre_peak_meter.clone(),
+            self.post_peak_meter.clone(),
             self.correcting_angle.clone(),
         )
     }
@@ -101,19 +123,24 @@ impl Plugin for Centered {
     ) -> ProcessStatus {
         if self.params.editor_state.is_open() {
             for mut channel_samples in buffer.iter_samples() {
+                let channel_left = *channel_samples.get_mut(0).unwrap();
+                let channel_right = *channel_samples.get_mut(1).unwrap();
+
                 let (left, right) = &self.stereo_data[self.stereo_data_idx];
                 left.store(
-                    *channel_samples.get_mut(0).unwrap(),
+                    channel_left,
                     std::sync::atomic::Ordering::Relaxed,
                 );
                 right.store(
-                    *channel_samples.get_mut(1).unwrap(),
+                    channel_right,
                     std::sync::atomic::Ordering::Relaxed,
                 );
 
                 self.stereo_data_idx += 1;
                 self.stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
             }
+
+            calc_peak(buffer, [&self.pre_peak_meter.0, &self.pre_peak_meter.1], self.peak_meter_decay_weight);
         }
 
         let t = |x: f32, y: f32| (y.abs() / x.abs()).atan().to_degrees();
@@ -142,7 +169,25 @@ impl Plugin for Centered {
             *channel_samples.get_mut(1).unwrap() = left.mul_add(-pan_sin, -(right * pan_cos));
         }
 
+        calc_peak(buffer, [&self.post_peak_meter.0, &self.post_peak_meter.1], self.peak_meter_decay_weight);
+
         ProcessStatus::Normal
+    }
+}
+
+fn calc_peak(buffer: &mut Buffer, peak: [&AtomicF32; 2], decay_weight: f32) {
+    for mut channel_samples in buffer.iter_samples() {
+        for (sample, peak) in channel_samples.iter_mut().zip(peak.iter()) {
+            let amp = sample.abs();
+            let current_peak = peak.load(Ordering::Relaxed);
+            let new_peak = if amp > current_peak {
+                amp
+            } else {
+                current_peak * decay_weight + amp * (1. - decay_weight)
+            };
+
+            peak.store(new_peak, Ordering::Relaxed);
+        }
     }
 }
 
