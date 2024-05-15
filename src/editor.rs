@@ -38,7 +38,8 @@ struct EditorState {
 #[allow(clippy::needless_pass_by_value)]
 pub fn editor(
     params: Arc<CenteredParams>,
-    stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
+    pre_stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
+    post_stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
     pre_peak_meter: Arc<(AtomicF32, AtomicF32)>,
     post_peak_meter: Arc<(AtomicF32, AtomicF32)>,
     correcting_angle: Arc<AtomicF32>,
@@ -215,7 +216,7 @@ pub fn editor(
 
                         let (translate_sin, translate_cos) = *TRANSLATE_SIN_COS;
 
-                        for (left, right) in stereo_data.iter().map(|(left, right)| {
+                        for (left, right) in pre_stereo_data.iter().map(|(left, right)| {
                             (
                                 left.load(std::sync::atomic::Ordering::Relaxed)
                                     .clamp(-1.0, 1.0),
@@ -235,6 +236,29 @@ pub fn editor(
                                 center + offset,
                                 1.5,
                                 Color32::WHITE.gamma_multiply((left.abs() + right.abs()) / 2.0),
+                            );
+                        }
+
+                        for (left, right) in post_stereo_data.iter().map(|(left, right)| {
+                            (
+                                left.load(std::sync::atomic::Ordering::Relaxed)
+                                    .clamp(-1.0, 1.0),
+                                right
+                                    .load(std::sync::atomic::Ordering::Relaxed)
+                                    .clamp(-1.0, 1.0),
+                            )
+                        }) {
+                            let dot_x = left * translate_cos - right * translate_sin;
+                            let dot_y = left * translate_sin + right * translate_cos;
+                            let offset = vec2(
+                                dot_x * scope_rect.width() / PI,
+                                dot_y * scope_rect.height() / PI,
+                            );
+
+                            painter.circle_filled(
+                                center + offset,
+                                1.5,
+                                cozy_ui::colors::HIGHLIGHT_COL32.gamma_multiply((left.abs() + right.abs()) / 2.0),
                             );
                         }
 

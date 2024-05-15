@@ -16,8 +16,10 @@ pub struct Centered {
     lookahead_buffer: Vec<(f32, f32)>,
     lookahead_buffer_idx: usize,
     correction_angle_smoother: Smoother<f32>,
-    stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
-    stereo_data_idx: usize,
+    pre_stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
+    pre_stereo_data_idx: usize,
+    post_stereo_data: Arc<[(AtomicF32, AtomicF32); GONIO_NUM_SAMPLES]>,
+    post_stereo_data_idx: usize,
     pre_peak_meter: Arc<(AtomicF32, AtomicF32)>,
     post_peak_meter: Arc<(AtomicF32, AtomicF32)>,
     peak_meter_decay_weight: f32,
@@ -47,11 +49,13 @@ impl Default for Centered {
             lookahead_buffer: Vec::default(),
             lookahead_buffer_idx: 0,
             // evil hack because AtomicF32 doesn't implement copy
-            stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
+            pre_stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
+            post_stereo_data: Arc::new([0; GONIO_NUM_SAMPLES].map(|_| Default::default())),
             pre_peak_meter: Arc::new(Default::default()),
             post_peak_meter: Arc::new(Default::default()),
             peak_meter_decay_weight: 0.0,
-            stereo_data_idx: 0,
+            pre_stereo_data_idx: 0,
+            post_stereo_data_idx: 0,
             correcting_angle: Arc::default(),
         }
     }
@@ -153,7 +157,8 @@ impl Plugin for Centered {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         editor(
             self.params.clone(),
-            self.stereo_data.clone(),
+            self.pre_stereo_data.clone(),
+            self.post_stereo_data.clone(),
             self.pre_peak_meter.clone(),
             self.post_peak_meter.clone(),
             self.correcting_angle.clone(),
@@ -171,12 +176,12 @@ impl Plugin for Centered {
                 let channel_left = *channel_samples.get_mut(0).unwrap();
                 let channel_right = *channel_samples.get_mut(1).unwrap();
 
-                let (left, right) = &self.stereo_data[self.stereo_data_idx];
+                let (left, right) = &self.pre_stereo_data[self.pre_stereo_data_idx];
                 left.store(channel_left, std::sync::atomic::Ordering::Relaxed);
                 right.store(channel_right, std::sync::atomic::Ordering::Relaxed);
 
-                self.stereo_data_idx += 1;
-                self.stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
+                self.pre_stereo_data_idx += 1;
+                self.pre_stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
             }
 
             calc_peak(
@@ -247,11 +252,25 @@ impl Plugin for Centered {
             *channel_samples.get_mut(1).unwrap() = left.mul_add(-pan_sin, -(right * pan_cos));
         }
 
-        calc_peak(
-            buffer,
-            [&self.post_peak_meter.0, &self.post_peak_meter.1],
-            self.peak_meter_decay_weight,
-        );
+        if self.params.editor_state.is_open() {
+            for mut channel_samples in buffer.iter_samples() {
+                let channel_left = *channel_samples.get_mut(0).unwrap();
+                let channel_right = *channel_samples.get_mut(1).unwrap();
+    
+                let (left, right) = &self.post_stereo_data[self.post_stereo_data_idx];
+                left.store(channel_left, std::sync::atomic::Ordering::Relaxed);
+                right.store(channel_right, std::sync::atomic::Ordering::Relaxed);
+    
+                self.post_stereo_data_idx += 1;
+                self.post_stereo_data_idx %= GONIO_NUM_SAMPLES - 1;
+            }
+    
+            calc_peak(
+                buffer,
+                [&self.post_peak_meter.0, &self.post_peak_meter.1],
+                self.peak_meter_decay_weight,
+            );
+        }
 
         ProcessStatus::Normal
     }
