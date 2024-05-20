@@ -46,8 +46,9 @@ jobs:
 
       - name: Set up Rust toolchain
         # Needed for SIMD
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2024-05-19
           # The macOS AArch64 build is done from an x86_64 macOS CI runner, so
           # it needs to be cross compiled
           targets: ${{ matrix.cross-target }}
