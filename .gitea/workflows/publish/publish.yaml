@@ -31,28 +31,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libgl-dev libjack-dev libx11-xcb-dev  libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev libxcursor-dev libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
-      - uses: actions/cache@v4
-        # FIXME: Caching `target/` causes the Windows runner to blow up after some time
-        if: startsWith(matrix.os, 'windows')
+      - name: cache
+        uses: actions/cache@v4
+        continue-on-error: false
         with:
           path: |
+            ~/.cargo/bin/
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-          key: ${{ matrix.name }}-${{ matrix.cross-target }}
-      - uses: actions/cache@v4
-        if: "!startsWith(matrix.os, 'windows')"
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ matrix.name }}-${{ matrix.cross-target }}
+            target/            
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       - name: Set up Rust toolchain
         # Needed for SIMD
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@stable
         with:
           # The macOS AArch64 build is done from an x86_64 macOS CI runner, so
           # it needs to be cross compiled
