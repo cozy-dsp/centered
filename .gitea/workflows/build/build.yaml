@@ -87,7 +87,7 @@ jobs:
           mkdir -p "$ARCHIVE_NAME/$ARCHIVE_NAME"
           mv target/bundled/* "$ARCHIVE_NAME/$ARCHIVE_NAME"
       - name: Add an OS-specific readme file with installation instructions
-        run: cp ".gitea/workflows/readme-${{ runner.os }}.txt" "$ARCHIVE_NAME/$ARCHIVE_NAME/README.txt"
+        run: cp ".gitea/workflows/README-${{ runner.os }}.pdf" "$ARCHIVE_NAME/$ARCHIVE_NAME/README.pdf"
       - uses: actions/upload-artifact@v3
         with:
           name: ${{ env.ARCHIVE_NAME }}
