@@ -9,6 +9,7 @@ use cozy_ui::{
     util::{generate_arc, get_set::Operation},
     widgets::knob::knob,
 };
+use form_urlencoded::byte_serialize;
 use nih_plug::{
     editor::Editor,
     params::{smoothing::AtomicF32, Param},
@@ -26,7 +27,7 @@ use once_cell::sync::Lazy;
 
 static TRANSLATE_SIN_COS: Lazy<(f32, f32)> = Lazy::new(|| (PI / 4.0).sin_cos());
 
-use crate::{CenteredParams, GONIO_NUM_SAMPLES};
+use crate::{CenteredParams, GONIO_NUM_SAMPLES, VERSION};
 
 #[derive(Default)]
 struct EditorState {
@@ -333,10 +334,11 @@ pub fn editor(
                     ui.vertical_centered(|ui| {
                         ui.heading(RichText::new("CENTERED").strong());
                         ui.label(
-                            RichText::new(format!("Version {}", env!("VERGEN_GIT_DESCRIBE")))
+                            RichText::new(format!("Version {}", VERSION))
                                 .italics(),
                         );
                         ui.hyperlink_to("Homepage", env!("CARGO_PKG_HOMEPAGE"));
+                        ui.hyperlink_to("Report a Bug", format!("{}/issues/new?template=.gitea%2fISSUE_TEMPLATE%2fbug-report.yaml&version={}", env!("CARGO_PKG_REPOSITORY"), byte_serialize(VERSION.as_bytes()).collect::<String>()));
                         ui.separator();
                         ui.heading(RichText::new("Credits"));
                         ui.label("Plugin by joe sorensen");

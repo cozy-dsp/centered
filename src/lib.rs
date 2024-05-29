@@ -6,6 +6,8 @@ use std::sync::{atomic::Ordering, Arc};
 
 mod editor;
 
+pub const VERSION: &str = env!("VERGEN_GIT_DESCRIBE");
+
 pub const GONIO_NUM_SAMPLES: usize = 1000;
 const PEAK_METER_DECAY_MS: f64 = 150.0;
 const MAX_LOOKAHEAD_MS: f32 = 10.0;
@@ -108,7 +110,7 @@ impl Plugin for Centered {
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
     const EMAIL: &'static str = "hi@cozydsp.space";
 
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    const VERSION: &'static str = VERSION;
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
         main_input_channels: NonZeroU32::new(2),

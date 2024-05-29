@@ -1,0 +1,14 @@
+name: Feature Request
+about: Request a new thing
+title: ""
+labels: ["feature-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        *If you want to request a new plugin, get in touch with me directly!*
+  - type: textarea
+    attributes:
+      label: What do you want to see added?
+    validations:
+      required: true

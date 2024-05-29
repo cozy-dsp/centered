@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["cozy dsp <hi@cozydsp.space>"]
 license = "GPL-3.0-or-later"
 homepage = "https://cozydsp.space"
+repository = "https://vcs.cozydsp.space/cozy-dsp/centered"
 description = "an attempt at recentering stereo signals"
 
 [workspace]
@@ -27,7 +28,11 @@ nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git" }
 egui_extras = { version = "0.27", features = ["image"] }
 image = { version = "0.24.9", default-features = false, features = ["png"] }
 once_cell = { version = "1.19.0", features = ["parking_lot"] }
-itertools = "0.12.1"
+itertools = "0.13"
+form_urlencoded = "1.2.1"
+
+[patch."https://github.com/BillyDM/egui-baseview"]
+egui-baseview = {git = "https://github.com/BillyDM/egui-baseview.git?rev=5d96dae98afd9afbcfb3515e6ddf3b1035f3320c"}
 
 [build-dependencies]
 anyhow = "1.0.81"
